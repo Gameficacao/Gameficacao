@@ -1206,6 +1206,7 @@ function loadComments(postId) {
                 });
 
                 showNotification('Nome de usuário definido com sucesso!');
+                location.reload();
                 updateUserInfo();
                 showCategorySelector();
             } catch (error) {
@@ -1301,6 +1302,18 @@ async function login() {
 
         const userInfo = (await db.ref('users/' + user.uid).once('value')).val();
 
+        realName();
+
+        showNotification('Login realizado com sucesso!');
+        showCategorySelector();
+    } catch (error) {
+        showNotification('Erro ao fazer login: ' + error.message, true);
+    }
+}
+
+async function realName() {
+    const userInfo = (await db.ref('users/' + user.uid).once('value')).val();
+
         if (!userInfo.realName) {
             const realName = prompt('Por favor, insira seu nome real:');
             if (realName && realName.trim() !== '') {
@@ -1312,12 +1325,6 @@ async function login() {
                 showNotification('Nome real não pode estar vazio.', true);
             }
         }
-
-        showNotification('Login realizado com sucesso!');
-        showCategorySelector();
-    } catch (error) {
-        showNotification('Erro ao fazer login: ' + error.message, true);
-    }
 }
 
 auth.onAuthStateChanged(async user => {
