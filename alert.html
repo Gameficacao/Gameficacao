@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://uploaddeimagens.com.br/images/004/814/521/full/gamefica%C3%A7%C3%A3o-icon_%281%29.png?1721856203" type="image/png">
+    <title>Atenção!</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+            max-width: 600px;
+        }
+        h1 {
+            color: #d9534f;
+            font-size: 24px;
+        }
+        p {
+            font-size: 18px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Você não é autorizado a abrir o devtools!</h1>
+        <p>Por favor, feche as ferramentas de desenvolvedor imediatamente.</p>
+        <p id="message">O gameficação não será aberto enquanto o devtools for desativado.</p>
+    </div>
+
+    <script>
+        // Função para verificar se as ferramentas de desenvolvedor estão abertas
+        function detectDevTools() {
+            const threshold = 160; // Tamanho máximo para a tela de desenvolvimento
+            const width = window.outerWidth - window.innerWidth > threshold;
+            const height = window.outerHeight - window.innerHeight > threshold;
+    
+            if (width || height) {
+                // Ferramentas de desenvolvedor estão abertas, abrir uma nova guia com o aviso
+                if (!localStorage.getItem('devToolsWarningShown')) {
+                    localStorage.setItem('devToolsWarningShown', 'true');
+                    localStorage.clear();
+                }
+                setTimeout(detectDevTools, 1000); // Verificar novamente após 1 segundo
+            } else {
+                // Ferramentas de desenvolvedor foram fechadas
+                localStorage.removeItem('devToolsWarningShown'); // Remove o aviso do localStorage
+                window.location = 'index.html';
+            }
+        }
+
+        // Limpar o localStorage ao carregar a página
+        window.onload = function() {
+            localStorage.removeItem('devToolsWarningShown'); // Remove qualquer item do localStorage relacionado ao aviso
+            detectDevTools(); // Iniciar a detecção
+        };
+    </script>
+    
+</body>
+</html>

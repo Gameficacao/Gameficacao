@@ -708,36 +708,122 @@ async function checkUserPresence() {
         return;
     }
 
-    const today = new Date();
-    const diadehoje = getFormattedDate(today);
     const userId = user.uid;
+    const now = new Date();
 
     try {
-        // Recupera horários de início e fim do banco de dados
-        const aulasSnapshot = await db.ref(`aulas/${diadehoje}`).once('value');
-        const horarios = aulasSnapshot.val();
+        // Recupera todas as datas de aulas do banco de dados
+        const aulasSnapshot = await db.ref('aulas').orderByKey().once('value');
+        const aulas = aulasSnapshot.val();
 
-        if (horarios) {
-            const intervalStart = horarios.comeca;
-            const intervalEnd = horarios.acaba;
+        if (aulas) {
+            for (const dateKey in aulas) {
+                if (aulas.hasOwnProperty(dateKey)) {
+                    const horarios = aulas[dateKey];
+                    const intervalStart = new Date(horarios.comeca);
+                    const intervalEnd = new Date(horarios.acaba);
 
-            // Verifica se o horário atual está dentro do intervalo
-            const formattedDate = new Date();
-            const now = formatDateToISO(formattedDate);
-            const isPresent = now >= intervalStart && now <= intervalEnd;
+                    let estado = '';
+                    let presente = null;
 
-            // Cria ou atualiza a pasta do usuário
-            const userPresenceRef = db.ref(`users/${userId}/${diadehoje}`);
-            await userPresenceRef.set({
-                presente: isPresent
-            });
+                    if (now > intervalEnd) {
+                        estado = 'passado';
+                        presente = false;
+                    } else if (now >= intervalStart && now <= intervalEnd) {
+                        estado = 'presente';
+                        presente = true;
+                    } else if (now < intervalStart) {
+                        estado = 'futuro';
+                        presente = null;
+                    }
+
+                    if (estado) {
+                        const userPresenceRef = db.ref(`users/${userId}/${dateKey}`);
+                        
+                        await userPresenceRef.set({
+                            presente: presente
+                        });
+                    }
+                }
+            }
         } else {
-            console.error('Nenhum horário encontrado para hoje.');
+            console.error('Nenhuma aula encontrada.');
         }
     } catch (error) {
         console.error('Erro ao verificar presença:', error);
     }
 }
+
+function formatDateToISO(date) {
+    return date.toISOString().split('T')[0];
+}
+
+
+async function verificarChamada() {
+    if (!isAdmin) {
+        console.log('Acesso negado: somente administradores podem executar este comando.');
+        return;
+    }
+    try {
+        const now = new Date();
+        console.log('Data e hora atuais:', now);
+
+        // Recupera todas as datas de aulas do banco de dados
+        const aulasSnapshot = await db.ref('aulas').orderByKey().once('value');
+        const aulas = aulasSnapshot.val();
+        console.log('Aulas recuperadas:', aulas);
+
+        if (aulas) {
+            for (const dateKey in aulas) {
+                if (aulas.hasOwnProperty(dateKey)) {
+                    const horarios = aulas[dateKey];
+                    const intervalEnd = new Date(horarios.acaba);
+                    console.log(`Verificando aula com chave ${dateKey}. Data final: ${intervalEnd}`);
+
+                    // Verifica se a data está no passado
+                    if (now > intervalEnd) {
+                        console.log(`Data ${intervalEnd} está no passado. Processando...`);
+
+                        // Recupera todos os usuários
+                        const usersSnapshot = await db.ref('users').once('value');
+                        const users = usersSnapshot.val();
+                        console.log('Usuários recuperados:', users);
+
+                        for (const userId in users) {
+                            if (users.hasOwnProperty(userId)) {
+                                const userPresenceRef = db.ref(`users/${userId}/${dateKey}`);
+
+                                // Verifica se a presença já existe
+                                const presenceSnapshot = await userPresenceRef.once('value');
+                                console.log(`Verificando presença do usuário ${userId} para a data ${dateKey}`);
+
+                                if (!presenceSnapshot.exists()) {
+                                    // Se não existir, cria e marca como false
+                                    console.log(`Presença não encontrada para ${userId} na data ${dateKey}. Criando entrada com 'presente: false'.`);
+                                    await userPresenceRef.set({
+                                        presente: false
+                                    });
+                                } else {
+                                    console.log(`Presença já existente para ${userId} na data ${dateKey}.`);
+                                }
+                            }
+                        }
+                    } else {
+                        console.log(`Data ${intervalEnd} ainda não passou. Ignorando...`);
+                    }
+                }
+            }
+        } else {
+            console.error('Nenhuma aula encontrada.');
+        }
+    } catch (error) {
+        console.error('Erro ao verificar e marcar presença para datas passadas:', error);
+    }
+}
+
+
+
+
 
 // Chama a função para verificar a presença do usuário
 checkUserPresence();
@@ -1018,6 +1104,84 @@ function enableAdmin() {
     isAdmin = true;
     loadCategories();
 }
+
+window.addEventListener('load', function() {
+    let devtoolsOpen = false;
+    const threshold = 160; // Largura mínima para considerar a DevTools aberta
+    const checkInterval = 1500; // Intervalo de verificação (em ms)
+    const alertPageUrl = 'alert.html'; // URL da página de alerta
+    const originalPageUrl = 'index.html'; // URL da página original
+
+    // Ocultar o conteúdo original da página até que o DevTools seja fechado
+    document.body.style.visibility = 'hidden';
+
+    // Criar e adicionar um overlay para ocultar o conteúdo original
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'white';
+    overlay.style.zIndex = '1000';
+    overlay.style.display = 'none'; // Inicialmente oculto
+    overlay.style.textAlign = 'center';
+    overlay.style.fontSize = '20px';
+    overlay.style.color = 'black';
+    overlay.innerText = 'Você não é autorizado a abrir o console.log. Feche-o imediatamente.';
+    document.body.appendChild(overlay);
+
+    // Função para verificar se o console está aberto
+    function detectDevTools() {
+        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+
+        if (widthThreshold || heightThreshold) {
+            if (!devtoolsOpen) {
+                devtoolsOpen = true;
+                if (typeof isAdmin === 'undefined' || !isAdmin) {
+                    // Redirecionar para a página de alerta
+                    if (window.location.pathname !== alertPageUrl) {
+                        window.location.href = alertPageUrl;
+                    }
+                }
+            }
+        } else {
+            if (devtoolsOpen) {
+                // DevTools foram fechadas, redirecionar de volta para a página original
+                if (window.location.pathname !== originalPageUrl) {
+                    window.location.href = originalPageUrl;
+                }
+            }
+            devtoolsOpen = false;
+        }
+    }
+
+    // Função para ativar uma ação específica após o recarregamento
+    function onPageReload() {
+        const devToolsOpened = sessionStorage.getItem('devToolsOpened') === 'true';
+        if (devToolsOpened) {
+            sessionStorage.removeItem('devToolsOpened'); // Limpar a flag
+            // Mostrar o conteúdo da página após o recarregamento se o DevTools foi fechado
+            document.body.style.visibility = 'visible';
+        } else {
+            // Mostrar o conteúdo da página após o carregamento inicial se não for uma situação de DevTools
+            document.body.style.visibility = 'visible';
+        }
+    }
+
+    // Função de exemplo que será ativada após o recarregamento
+    function activatePostReloadFunction() {
+        detectDevTools();
+    }
+
+    // Verificar imediatamente após o carregamento da página
+    detectDevTools();
+    onPageReload();
+
+    // Verificar a cada intervalo de tempo também, caso o usuário abra ou feche as DevTools após o carregamento inicial
+    setInterval(detectDevTools, checkInterval);
+});
 
 
         function showCategorySelector() {
