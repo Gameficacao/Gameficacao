@@ -821,7 +821,7 @@ function loadPostsForCategory(categoryId) {
     const postsContainer = document.getElementById('posts-content');
     postsContainer.innerHTML = '';
 
-    db.ref('posts/' + categoryId).once('value', snapshot => {
+    db.ref('categories/' + currentCategoryId + '/posts/').once('value', snapshot => {
         if (snapshot.exists()) {
             const posts = snapshot.val();
             Object.keys(posts).forEach(postId => {
@@ -878,7 +878,7 @@ async function hideCreatePostSection(acao, postId = null) {
 async function getPostData(currentCategoryId, postId) {
     try {
         // Criando a referência ao caminho desejado
-        const postRef = db.ref('posts/' + currentCategoryId + '/' + postId);
+        const postRef = db.ref('categories/' + currentCategoryId + '/posts/' + '/' + postId);
 
         // Obtendo os dados da referência
         const snapshot = await postRef.once('value');
@@ -1070,7 +1070,7 @@ async function addPost(categoryId, acao, postId = null) {
 
         if (acao === 'y') {
             // Criar nova postagem
-            const newPostRef = db.ref('posts/' + categoryId).push();
+            const newPostRef = db.ref('categories/' + currentCategoryId + '/posts/').push();
             await newPostRef.set({
                 title: title,
                 content: content,
@@ -1081,7 +1081,7 @@ async function addPost(categoryId, acao, postId = null) {
             showNotification('Postagem criada com sucesso!');
         } else if (acao === 'n' && postId) {
             // Atualizar postagem existente
-            await db.ref('posts/' + categoryId + '/' + postId).update({
+            await db.ref('categories/' + currentCategoryId + '/posts/' + '/' + postId).update({
                 title: title,
                 content: content,
                 authorId: user.uid,
@@ -1282,7 +1282,7 @@ function addComment(postId, action, commentId = null) {
     if (commentContent.trim() !== '<p><br></p>' && commentTitle.trim() !== '') { // Verifica se o conteúdo e o título não estão vazios
         if (action === 'y') {
             // Novo comentário
-            const newCommentRef = db.ref('posts/' + postId + '/comments').push();
+            const newCommentRef = db.ref('categories/' + currentCategoryId + '/posts/' + postId + '/comments').push();
             newCommentRef.set({
                 title: commentTitle,
                 text: commentContent,
@@ -1301,7 +1301,7 @@ function addComment(postId, action, commentId = null) {
             });
         } else if (action === 'n' && commentId) {
             // Editar comentário existente
-            const commentRef = db.ref('posts/' + postId + '/comments/' + commentId);
+            const commentRef = db.ref('categories/' + currentCategoryId + '/posts/' + postId + '/comments/' + commentId);
             commentRef.update({
                 title: commentTitle,
                 text: commentContent,
@@ -1357,7 +1357,7 @@ function loadComments(postId) {
     const commentsContainer = document.getElementById('comments-container');
     commentsContainer.innerHTML = ''; // Limpa os comentários antigos
 
-    db.ref('posts/' + postId + '/comments').on('value', function(snapshot) {
+    db.ref('categories/' + currentCategoryId + '/posts/' + postId + '/comments').on('value', function(snapshot) {
         snapshot.forEach(function(childSnapshot) {
             const comment = childSnapshot.val();
             const commentId = childSnapshot.key;
@@ -1412,7 +1412,7 @@ function loadComments(postId) {
 
             postsContainer.innerHTML = '';
 
-            db.ref('posts/' + category).once('value').then(snapshot => {
+            db.ref('categories/' + currentCategoryId + '/posts/' + category).once('value').then(snapshot => {
                 if (snapshot.exists()) {
                     const posts = snapshot.val();
                     Object.keys(posts).forEach(postId => {
