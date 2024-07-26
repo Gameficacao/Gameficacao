@@ -454,8 +454,8 @@ body {
     <input type="text" id="post-title" placeholder="Título da Pergunta" aria-label="Título da Pergunta" />
     <div id="editor-container" aria-label="Editor de conteúdo"></div>
     <button onclick="previewContent()">Prever</button>
-    <button onclick="addPost(currentCategoryId)" id="add-post-button">Criar Pergunta</button>
-    <button onclick="hideCreatePostSection()">Cancelar</button>
+    <button id="add-post-button">Criar Pergunta</button>
+    <button id="cancel_create_question">Cancelar</button>
 </div>
 
 <div id="post-details" class="section" style="display: none;">
@@ -471,7 +471,7 @@ body {
             <div id="preview-container-2"></div>
             <input type="text" id="comment-title" placeholder="Título do Comentário" value=''/>
             <div id="comment-input"></div>
-            <button onclick="addComment(currentPostId)">Enviar Resposta</button>
+            <button id="answer_button">Enviar Resposta</button>
             <button onclick="backToPostDetails()">Voltar</button>
         </div>
     </div>
@@ -515,16 +515,12 @@ let commentQuill; // Declare a variable to hold the Quill instance
 
 function tituloRespostaPadrao() {
     var comment_title = document.getElementById('comment-title');
-    console.log(comment_title.value);
-    console.log(post_title);
     comment_title.value = `Re: ${post_title.textContent}`;
-    console.log(comment_title.value);
 }
 var post_title;
 
 function toggleCommentSection() {
     post_title = document.getElementById('post-title-preview');
-    console.log(post_title);
     const postDetailsSection = document.getElementById('post-details');
     const commentTools = document.getElementById('comment-tools');
     const commentInput = document.getElementById('comment-input');
@@ -542,6 +538,7 @@ function toggleCommentSection() {
         document.getElementById('comments-container').style.display = 'none';
         comments_title.style.display = 'none';
         comment_button.style.display = 'none';
+        tituloRespostaPadrao();
 
         // Initialize Quill if not already initialized
         if (!commentQuill) {
@@ -558,7 +555,6 @@ function toggleCommentSection() {
     ]
   }
 });
-tituloRespostaPadrao();
         }
     } else {
         commentTools.style.display = 'none';
@@ -860,11 +856,44 @@ function loadPostsForCategory(categoryId) {
     });
 }
 
-// Função para esconder a seção de criação de postagem
-function hideCreatePostSection() {
-    document.getElementById('create-post-section').style.display = 'none';
-    document.getElementById('new-post-button').style.display = 'block';
-    clearCreatePostSection();
+async function hideCreatePostSection(acao, postId = null) {
+    if (acao === 'y') {
+        document.getElementById('create-post-section').style.display = 'none';
+        document.getElementById('new-post-button').style.display = 'block';
+        clearCreatePostSection();  
+        loadPostsForCategory(currentCategoryId); 
+    } else if (acao === 'n' && postId) {
+        document.getElementById('create-post-section').style.display = 'none';
+        clearCreatePostSection();  
+
+        // Aguarde o resultado da função getPostData
+        const resultado = await getPostData(currentCategoryId, postId);
+
+        // Passe o resultado não Promise para showPostDetails
+        showPostDetails(resultado, postId);
+    }
+}
+
+
+async function getPostData(currentCategoryId, postId) {
+    try {
+        // Criando a referência ao caminho desejado
+        const postRef = db.ref('posts/' + currentCategoryId + '/' + postId);
+
+        // Obtendo os dados da referência
+        const snapshot = await postRef.once('value');
+        
+        // Verificando se a snapshot possui dados
+        if (snapshot.exists()) {
+            const postData = snapshot.val();
+            return postData;
+        } else {
+            console.error('Nenhum dado encontrado no caminho.');
+            return null;
+        }
+    } catch (error) {
+        console.error('Erro ao obter os dados:', error);
+    }
 }
 
 function clearCreatePostSection() {
@@ -1019,7 +1048,7 @@ function enableAdmin() {
 });
 
 
-async function addPost(categoryId) {
+async function addPost(categoryId, acao, postId = null) {
     const title = document.getElementById('post-title').value;
     const content = quill.root.innerHTML;  // Use o conteúdo gerado pelo Quill
 
@@ -1039,22 +1068,35 @@ async function addPost(categoryId) {
         const userData = userSnapshot.val();
         const authorName = userData ? userData.username : 'Anônimo';
 
-        const newPostRef = db.ref('posts/' + categoryId).push();
-        await newPostRef.set({
-            title: title,
-            content: content,
-            authorId: user.uid,
-            authorName: authorName,
-            timestamp: new Date().toISOString()
-        });
+        if (acao === 'y') {
+            // Criar nova postagem
+            const newPostRef = db.ref('posts/' + categoryId).push();
+            await newPostRef.set({
+                title: title,
+                content: content,
+                authorId: user.uid,
+                authorName: authorName,
+                timestamp: new Date().toISOString()
+            });
+            showNotification('Postagem criada com sucesso!');
+        } else if (acao === 'n' && postId) {
+            // Atualizar postagem existente
+            await db.ref('posts/' + categoryId + '/' + postId).update({
+                title: title,
+                content: content,
+                authorId: user.uid,
+                authorName: authorName,
+                timestamp: new Date().toISOString()
+            });
+            showNotification('Postagem editada com sucesso!');
+        }
 
-        showNotification('Postagem criada com sucesso!');
-        hideCreatePostSection();
         loadPostsForCategory(categoryId);
     } catch (error) {
-        showNotification('Erro ao criar postagem: ' + error.message, true);
+        showNotification('Erro ao criar ou editar postagem: ' + error.message, true);
     }
 }
+
 
 function previewContent() {
     const content = quill.root.innerHTML;
@@ -1093,6 +1135,7 @@ function showPostDetails(post, postId) {
     const postDetailsSection = document.getElementById('post-details');
     postDetailsSection.querySelector('#post-title-preview').textContent = post.title;
     postDetailsSection.querySelector('#post-author-date').textContent = `Autor: ${post.authorName} | Publicado em: ${new Date(post.timestamp).toLocaleString()}`;
+    criarEditarPostagem(post, postId, postDetailsSection);
     postDetailsSection.querySelector('#post-content').innerHTML = post.content;
     var botao_postagem = document.getElementById('new-post-button');
     botao_postagem.style.display = 'none';
@@ -1105,8 +1148,130 @@ function showPostDetails(post, postId) {
     loadComments(postId);
 }
 
+async function criarEditarPostagem(post, postId, postDetailsSection) {
+    var user = auth.currentUser;
+    const userInfo = (await db.ref('users/' + user.uid).once('value')).val();
+        
+    if (userInfo.username === post.authorName) {
+    // Verifica se o botão já foi adicionado
+    const existingButton = postDetailsSection.querySelector('#post-author-date .edit-button');
+    if (!existingButton) {
+        // Cria e adiciona uma quebra de linha
+        const br = document.createElement('br');
+        postDetailsSection.querySelector('#post-author-date').appendChild(br);
 
-function addComment(postId) {
+        // Cria e adiciona o botão de editar resposta
+        const button = document.createElement('button');
+        button.classList.add('edit-button'); // Adiciona uma classe para identificação
+        button.innerHTML = 'Editar resposta';
+        button.onclick = function() {
+            editarPostagem(postId);
+        };
+
+        postDetailsSection.querySelector('#post-author-date').appendChild(button);
+    }
+}
+}
+
+// Função que é chamada quando o botão de criar postagem é clicado
+function criarPostHandler() {
+    addPost(currentCategoryId, 'y');
+    removerEventos(); // Remove o listener após a execução
+}
+
+function voltarCriarPost() {
+    hideCreatePostSection('y');
+    // Restaurar os eventos para criação de postagem
+    restaurarEventos();
+}
+
+function voltarEditarPost(postId) {
+    hideCreatePostSection('n', postId);
+    // Restaurar os eventos para edição de postagem
+    restaurarEventos();
+}
+
+// Função que é chamada quando o botão de criar postagem é clicado para editar
+function editarPostHandler(postId) {
+    addPost(currentCategoryId, 'n', postId);
+    removerEventos(); // Remove o listener após a execução
+}
+
+// Função para remover os eventos dos botões
+function removerEventos() {
+    var botao_criar_postagem = document.getElementById('add-post-button');
+    var cancel_create_question = document.getElementById('cancel_create_question');
+
+    if (botao_criar_postagem) {
+        botao_criar_postagem.removeEventListener('click', criarPostHandler);
+        botao_criar_postagem.removeEventListener('click', editarPostHandler);
+    }
+
+    if (cancel_create_question) {
+        cancel_create_question.removeEventListener('click', voltarCriarPost);
+        cancel_create_question.removeEventListener('click', voltarEditarPost);
+    }
+}
+
+// Função para restaurar os eventos
+function restaurarEventos() {
+    var botao_criar_postagem = document.getElementById('add-post-button');
+    var cancel_create_question = document.getElementById('cancel_create_question');
+
+    if (botao_criar_postagem) {
+        // Adiciona o manipulador de evento original para criação de postagem
+        botao_criar_postagem.addEventListener('click', criarPostHandler);
+    }
+
+    if (cancel_create_question) {
+        // Adiciona o manipulador de evento original para voltar à criação de postagem
+        cancel_create_question.addEventListener('click', voltarCriarPost);
+    }
+}
+
+// Adicionar o manipulador de evento inicial
+function configurarEventosIniciais() {
+    var botao_criar_postagem = document.getElementById('add-post-button');
+    var cancel_create_question = document.getElementById('cancel_create_question');
+
+    if (botao_criar_postagem) {
+        botao_criar_postagem.addEventListener('click', criarPostHandler);
+    }
+
+    if (cancel_create_question) {
+        cancel_create_question.addEventListener('click', voltarCriarPost);
+    }
+}
+
+// Função para ativar a edição de postagem
+function editarPostagem(postId) {
+    showCreatePostSection();
+    removerEventos(); // Remove eventos existentes
+
+    var botao_criar_postagem = document.getElementById('add-post-button');
+    var cancel_create_question = document.getElementById('cancel_create_question');
+
+    if (botao_criar_postagem) {
+        // Adiciona o novo manipulador de evento para edição
+        botao_criar_postagem.addEventListener('click', () => {
+            editarPostHandler(postId);
+        });
+    }
+
+    if (cancel_create_question) {
+        cancel_create_question.addEventListener('click', () => {
+            voltarEditarPost(postId);
+        });
+    }
+}
+
+// Configurar eventos iniciais
+configurarEventosIniciais();
+
+
+
+
+function addComment(postId, action, commentId = null) {
     const commentTitle = document.getElementById('comment-title').value; // Obter o título do comentário
     const commentContent = commentQuill.root.innerHTML;
     const timestamp = new Date().toISOString(); // Data e hora atuais
@@ -1115,29 +1280,78 @@ function addComment(postId) {
     const authorName = currentUsername || 'Usuário'; // Usar o nome do usuário armazenado globalmente
 
     if (commentContent.trim() !== '<p><br></p>' && commentTitle.trim() !== '') { // Verifica se o conteúdo e o título não estão vazios
-        const newCommentRef = db.ref('posts/' + postId + '/comments').push();
-        newCommentRef.set({
-            title: commentTitle,
-            text: commentContent,
-            author: authorName,
-            timestamp: timestamp
-        }, function(error) {
-            if (error) {
-                showNotification('Erro ao adicionar comentário.', true);
-            } else {
-                showNotification('Comentário adicionado com sucesso.', false);
-                document.getElementById('comment-title').value = ''; // Limpa o título
-                backToPostDetails();
-                commentQuill.root.innerHTML = ''; // Limpa o editor Quill
-                loadComments(postId); // Atualiza a lista de comentários
-            }
-        });
+        if (action === 'y') {
+            // Novo comentário
+            const newCommentRef = db.ref('posts/' + postId + '/comments').push();
+            newCommentRef.set({
+                title: commentTitle,
+                text: commentContent,
+                author: authorName,
+                timestamp: timestamp
+            }, function(error) {
+                if (error) {
+                    showNotification('Erro ao adicionar comentário.', true);
+                } else {
+                    showNotification('Comentário adicionado com sucesso.', false);
+                    document.getElementById('comment-title').value = ''; // Limpa o título
+                    backToPostDetails();
+                    commentQuill.root.innerHTML = ''; // Limpa o editor Quill
+                    loadComments(postId); // Atualiza a lista de comentários
+                }
+            });
+        } else if (action === 'n' && commentId) {
+            // Editar comentário existente
+            const commentRef = db.ref('posts/' + postId + '/comments/' + commentId);
+            commentRef.update({
+                title: commentTitle,
+                text: commentContent,
+                author: authorName,
+                timestamp: timestamp
+            }, function(error) {
+                if (error) {
+                    showNotification('Erro ao editar comentário.', true);
+                } else {
+                    showNotification('Comentário editado com sucesso.', false);
+                    document.getElementById('comment-title').value = ''; // Limpa o título
+                    backToPostDetails();
+                    commentQuill.root.innerHTML = ''; // Limpa o editor Quill
+                    loadComments(postId); // Atualiza a lista de comentários
+                }
+            });
+            var answerButton = document.getElementById('answer_button');
+            answerButton.onclick = function() {
+            addComment(currentPostId, 'y');
+            };    
+        } else {
+            showNotification('Ação inválida ou ID do comentário não fornecido.', true);
+        }
     } else {
         showNotification('O comentário e o título não podem estar vazios.', true);
     }
 }
 
 
+async function criarEditarComentario(comment, commentHeader, commentId) {
+    var user = auth.currentUser;
+    const userInfo = (await db.ref('users/' + user.uid).once('value')).val();
+        
+    if (userInfo.username == comment.author) {
+        commentHeader.innerHTML += `<br><button onclick='(function() { editarComentario("${commentId}"); })()'>Editar resposta</button>`;
+    }
+}
+
+var answerButton = document.getElementById('answer_button');
+    answerButton.onclick = function() {
+            addComment(currentPostId, 'y');
+        };
+
+function editarComentario(commentId) {
+    var answerButton = document.getElementById('answer_button');
+    answerButton.onclick = function() {
+            addComment(currentPostId, 'n', commentId);
+        };
+    toggleCommentSection();
+} 
 
 function loadComments(postId) {
     const commentsContainer = document.getElementById('comments-container');
@@ -1155,6 +1369,8 @@ function loadComments(postId) {
             const commentHeader = document.createElement('div');
             commentHeader.classList.add('comment-header');
             commentHeader.innerHTML = `<strong>${comment.title}</strong> - ${comment.author} - ${new Date(comment.timestamp).toLocaleString()}`;
+            criarEditarComentario(comment, commentHeader, commentId);
+
 
             const commentQuillDiv = document.createElement('div');
             commentQuillDiv.id = 'comment-' + commentId;
@@ -1250,9 +1466,6 @@ function loadComments(postId) {
                 const user = result.user;
                 db.ref('users/' + user.uid).once('value').then(snapshot => {
                     if (!snapshot.exists()) {
-                        db.ref('users/' + user.uid).set({
-                        admin: false
-                        });
                         showSetUsername();
                     } else {
                         showNotification('Login com Google realizado com sucesso!');
@@ -1379,6 +1592,13 @@ auth.onAuthStateChanged(async user => {
                 showNotification('Nome real não pode estar vazio.', true);
             }
         }
+
+        if (!userInfo.admin) {
+    await db.ref('users/' + user.uid).update({
+        admin: false
+    });
+}
+
 
         await updateUserInfo();
         showCategorySelector();
