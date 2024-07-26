@@ -1232,8 +1232,8 @@ function loadComments(postId) {
                 });
 
                 showNotification('Nome de usuário definido com sucesso!');
-                location.reload();
                 updateUserInfo();
+                location.reload();
                 showCategorySelector();
             } catch (error) {
                 showNotification('Erro ao definir nome de usuário: ' + error.message, true);
@@ -1250,6 +1250,9 @@ function loadComments(postId) {
                 const user = result.user;
                 db.ref('users/' + user.uid).once('value').then(snapshot => {
                     if (!snapshot.exists()) {
+                        db.ref('users/' + user.uid).set({
+                        admin: false
+                        });
                         showSetUsername();
                     } else {
                         showNotification('Login com Google realizado com sucesso!');
