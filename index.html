@@ -459,7 +459,7 @@ body {
 </div>
 
 <div id="post-details" class="section" style="display: none;">
-        <h2 id="post-title"></h2>
+        <h2 id="post-title-preview"></h2>
         <p id="post-author-date"></p>
         <p id="post-content"></p>
     <div id="comments-section">
@@ -469,7 +469,7 @@ body {
         <div id="comment-tools" style="display: none;">
             <button onclick="previewContentComments()">Prever</button>
             <div id="preview-container-2"></div>
-            <input type="text" id="comment-title" placeholder="Título do Comentário" />
+            <input type="text" id="comment-title" placeholder="Título do Comentário" value=''/>
             <div id="comment-input"></div>
             <button onclick="addComment(currentPostId)">Enviar Resposta</button>
             <button onclick="backToPostDetails()">Voltar</button>
@@ -512,7 +512,19 @@ function showPostsMenu() {
 
 let commentQuill; // Declare a variable to hold the Quill instance
 
+
+function tituloRespostaPadrao() {
+    var comment_title = document.getElementById('comment-title');
+    console.log(comment_title.value);
+    console.log(post_title);
+    comment_title.value = `Re: ${post_title.textContent}`;
+    console.log(comment_title.value);
+}
+var post_title;
+
 function toggleCommentSection() {
+    post_title = document.getElementById('post-title-preview');
+    console.log(post_title);
     const postDetailsSection = document.getElementById('post-details');
     const commentTools = document.getElementById('comment-tools');
     const commentInput = document.getElementById('comment-input');
@@ -524,7 +536,7 @@ function toggleCommentSection() {
 
     if (commentTools.style.display === 'none') {
         commentTools.style.display = 'block';
-        postDetailsSection.querySelector('#post-title').style.display = 'none';
+        postDetailsSection.querySelector('#post-title-preview').style.display = 'none';
         postDetailsSection.querySelector('#post-author-date').style.display = 'none';
         postDetailsSection.querySelector('#post-content').style.display = 'none';
         document.getElementById('comments-container').style.display = 'none';
@@ -546,10 +558,11 @@ function toggleCommentSection() {
     ]
   }
 });
+tituloRespostaPadrao();
         }
     } else {
         commentTools.style.display = 'none';
-        postDetailsSection.querySelector('#post-title').style.display = 'block';
+        postDetailsSection.querySelector('#post-title-preview').style.display = 'block';
         postDetailsSection.querySelector('#post-author-date').style.display = 'block';
         postDetailsSection.querySelector('#post-content').style.display = 'block';
         document.getElementById('comments-container').style.display = 'block';
@@ -570,7 +583,7 @@ function backToPostDetails() {
     comment_button.style.display = 'block';
     comments_title.style.display = 'block';
     commentTools.style.display = 'none';
-    postDetailsSection.querySelector('#post-title').style.display = 'block';
+    postDetailsSection.querySelector('#post-title-preview').style.display = 'block';
     postDetailsSection.querySelector('#post-author-date').style.display = 'block';
     postDetailsSection.querySelector('#post-content').style.display = 'block';
     document.getElementById('comments-container').style.display = 'block';
@@ -855,7 +868,7 @@ function hideCreatePostSection() {
 }
 
 function clearCreatePostSection() {
-    document.getElementById('post-title').value = '';
+    document.getElementById('post-title-preview').value = '';
     if (window.quill) {
         window.quill.root.innerHTML = '';
     }
@@ -1078,7 +1091,7 @@ let currentPostId;
 function showPostDetails(post, postId) {
     currentPostId = postId;
     const postDetailsSection = document.getElementById('post-details');
-    postDetailsSection.querySelector('#post-title').textContent = post.title;
+    postDetailsSection.querySelector('#post-title-preview').textContent = post.title;
     postDetailsSection.querySelector('#post-author-date').textContent = `Autor: ${post.authorName} | Publicado em: ${new Date(post.timestamp).toLocaleString()}`;
     postDetailsSection.querySelector('#post-content').innerHTML = post.content;
     var botao_postagem = document.getElementById('new-post-button');
@@ -1091,9 +1104,6 @@ function showPostDetails(post, postId) {
     // Carregar comentários existentes
     loadComments(postId);
 }
-
-
-
 
 
 function addComment(postId) {
@@ -1323,7 +1333,11 @@ async function login() {
         showNotification('Login realizado com sucesso!');
         showCategorySelector();
     } catch (error) {
-        showNotification('Erro ao fazer login: ' + error.message, true);
+        if (error.message === '{"error":{"code":400,"message":"INVALID_LOGIN_CREDENTIALS","errors":[{"message":"INVALID_LOGIN_CREDENTIALS","domain":"global","reason":"invalid"}]}}') {
+            showNotification('Erro ao fazer login: Email, nome de usuário ou senha incorretos ou não existentes.', true);
+        } else {
+            showNotification('Erro ao fazer login: ' + error.message, true);
+        }
     }
 }
 
@@ -1346,6 +1360,10 @@ async function realName() {
 auth.onAuthStateChanged(async user => {
     if (user) {
         const userInfo = (await db.ref('users/' + user.uid).once('value')).val();
+        
+        if (!userInfo.username) {
+            showSetUsername();
+        }
         
         if (!userInfo.realName) {
             const realName = prompt('Por favor, insira seu nome real (Completo):');
