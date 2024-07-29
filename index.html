@@ -1758,18 +1758,6 @@ auth.onAuthStateChanged(async user => {
         if (!userInfo.username) {
             showSetUsername();
         }
-        
-        if (!userInfo.realName) {
-            const realName = prompt('Por favor, insira seu nome real (Completo):');
-            if (realName && realName.trim() !== '') {
-                await db.ref('users/' + user.uid).update({
-                    realName: realName.trim()
-                });
-                showNotification('Nome real registrado com sucesso!');
-            } else {
-                showNotification('Nome real não pode estar vazio.', true);
-            }
-        }
 
         if (!userInfo.admin) {
     await db.ref('users/' + user.uid).update({
