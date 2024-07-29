@@ -1611,7 +1611,7 @@ function loadComments(postId) {
 
                 showNotification('Nome de usuário definido com sucesso!');
                 updateUserInfo();
-                location.reload();
+                realName();
                 showCategorySelector();
             } catch (error) {
                 showNotification('Erro ao definir nome de usuário: ' + error.message, true);
@@ -1629,6 +1629,7 @@ function loadComments(postId) {
                 db.ref('users/' + user.uid).once('value').then(snapshot => {
                     if (!snapshot.exists()) {
                         showSetUsername();
+                        realName();
                     } else {
                         showNotification('Login com Google realizado com sucesso!');
                         updateUserInfo();
@@ -1774,6 +1775,8 @@ auth.onAuthStateChanged(async user => {
         function loadCategories() {
     const categoryButtonsContainer = document.getElementById('category-buttons-container');
     const currentDate = new Date().toISOString();
+    
+    realName();
 
     db.ref('categories').once('value').then(snapshot => {
         if (snapshot.exists()) {
