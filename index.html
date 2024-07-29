@@ -740,9 +740,13 @@ async function checkUserPresence() {
                     if (estado) {
                         const userPresenceRef = db.ref(`users/${userId}/${dateKey}`);
                         
-                        await userPresenceRef.set({
-                            presente: presente
-                        });
+                        // Verifica se já existe um registro de presença
+                        const userPresenceSnapshot = await userPresenceRef.once('value');
+                        if (!userPresenceSnapshot.exists()) {
+                            await userPresenceRef.set({
+                                presente: presente
+                            });
+                        }
                     }
                 }
             }
@@ -753,6 +757,7 @@ async function checkUserPresence() {
         console.error('Erro ao verificar presença:', error);
     }
 }
+
 
 function formatDateToISO(date) {
     return date.toISOString().split('T')[0];
@@ -820,13 +825,6 @@ async function verificarChamada() {
         console.error('Erro ao verificar e marcar presença para datas passadas:', error);
     }
 }
-
-
-
-
-
-// Chama a função para verificar a presença do usuário
-checkUserPresence();
 
     /// Código de monitoramento de atividade do usuário
     let lastVisibleTime = null;
