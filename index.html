@@ -1611,7 +1611,6 @@ function loadComments(postId) {
 
                 showNotification('Nome de usuário definido com sucesso!');
                 updateUserInfo();
-                realName();
                 showCategorySelector();
             } catch (error) {
                 showNotification('Erro ao definir nome de usuário: ' + error.message, true);
@@ -1629,7 +1628,6 @@ function loadComments(postId) {
                 db.ref('users/' + user.uid).once('value').then(snapshot => {
                     if (!snapshot.exists()) {
                         showSetUsername();
-                        realName();
                     } else {
                         showNotification('Login com Google realizado com sucesso!');
                         updateUserInfo();
@@ -1707,8 +1705,6 @@ async function login() {
 
         const userInfo = (await db.ref('users/' + user.uid).once('value')).val();
 
-        realName();
-
         showNotification('Login realizado com sucesso!');
         showCategorySelector();
     } catch (error) {
@@ -1721,12 +1717,21 @@ async function login() {
 }
 
 async function realName() {
-    const userInfo = (await db.ref('users/' + user.uid).once('value')).val();
+    const user = auth.currentUser;
+    if (!user) {
+        console.error('Usuário não está autenticado.');
+        return;
+    }
 
-        if (!userInfo.realName) {
+    try {
+        const userRef = db.ref('users/' + user.uid);
+        const userInfoSnapshot = await userRef.once('value');
+        const userInfo = userInfoSnapshot.val();
+
+        if (!userInfo || !userInfo.realName) {
             const realName = prompt('Por favor, insira seu nome real:');
             if (realName && realName.trim() !== '') {
-                await db.ref('users/' + user.uid).update({
+                await userRef.update({
                     realName: realName.trim()
                 });
                 showNotification('Nome real registrado com sucesso!');
@@ -1734,7 +1739,17 @@ async function realName() {
                 showNotification('Nome real não pode estar vazio.', true);
             }
         }
+    } catch (error) {
+        console.error('Erro ao registrar nome real:', error);
+    }
 }
+
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        await realName();
+    }
+});
+
 
 auth.onAuthStateChanged(async user => {
     if (user) {
@@ -1776,7 +1791,6 @@ auth.onAuthStateChanged(async user => {
     const categoryButtonsContainer = document.getElementById('category-buttons-container');
     const currentDate = new Date().toISOString();
     
-    realName();
 
     db.ref('categories').once('value').then(snapshot => {
         if (snapshot.exists()) {
