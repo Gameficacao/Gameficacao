@@ -397,6 +397,9 @@ body {
             <button onclick="login()">Entrar</button>
             <button class="google-login-button" onclick="loginWithGoogle()">Login com Google</button>
             <p>Não tem uma conta? <a href="javascript:void(0)" onclick="showRegistration()">Registre-se</a></p>
+            <div class="password-reset">
+                <a href="#" id="reset-password-link">Esqueceu sua senha?</a>
+              </div>              
         </div>
 
         <!-- Seção de Registro -->
@@ -487,6 +490,8 @@ body {
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
     <script>
+
+let contextMenuListenerAdded = false;
 
 const firebaseConfig = {
             apiKey: "AIzaSyD4XHaigE5Q5cHwH1SetPa8kAMGe_gpxNM",
@@ -1012,6 +1017,22 @@ function createPostElement(post, postId, categoryId) {
     return postElement;
 }
 
+document.getElementById('reset-password-link').addEventListener('click', function() {
+  var email = prompt('Por favor, insira seu email:');
+
+  if (email) {
+    firebase.auth().sendPasswordResetEmail(email)
+      .then(function() {
+        alert('Email de redefinição de senha enviado!');
+      })
+      .catch(function(error) {
+        var errorCode = error.code;
+        var errorMessage = error.message;
+        // Mostre o erro para o usuário
+        alert('Erro ao enviar email de redefinição de senha: ' + errorMessage);
+      });
+  }
+});
 
 
 async function addCategory() {
@@ -1100,86 +1121,25 @@ async function updateUserInfo() {
 
 function enableAdmin() {
     isAdmin = true;
+    consoleControl(isAdmin);
     loadCategories();
 }
 
-window.addEventListener('load', function() {
-    let devtoolsOpen = false;
-    const threshold = 160; // Largura mínima para considerar a DevTools aberta
-    const checkInterval = 1500; // Intervalo de verificação (em ms)
-    const alertPageUrl = 'alert.html'; // URL da página de alerta
-    const originalPageUrl = 'index.html'; // URL da página original
-
-    // Ocultar o conteúdo original da página até que o DevTools seja fechado
-    document.body.style.visibility = 'hidden';
-
-    // Criar e adicionar um overlay para ocultar o conteúdo original
-    const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.backgroundColor = 'white';
-    overlay.style.zIndex = '1000';
-    overlay.style.display = 'none'; // Inicialmente oculto
-    overlay.style.textAlign = 'center';
-    overlay.style.fontSize = '20px';
-    overlay.style.color = 'black';
-    overlay.innerText = 'Você não é autorizado a abrir o console.log. Feche-o imediatamente.';
-    document.body.appendChild(overlay);
-
-    // Função para verificar se o console está aberto
-    function detectDevTools() {
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-
-        if (widthThreshold || heightThreshold) {
-            if (!devtoolsOpen) {
-                devtoolsOpen = true;
-                if (typeof isAdmin === 'undefined' || !isAdmin) {
-                    // Redirecionar para a página de alerta
-                    if (window.location.pathname !== alertPageUrl) {
-                        window.location.href = alertPageUrl;
-                    }
-                }
+document.addEventListener('copy', function(event) {
+    // Verifica se o conteúdo copiado é uma imagem
+    if (event.clipboardData && event.clipboardData.items) {
+        for (let item of event.clipboardData.items) {
+            if (item.type.startsWith('image/')) {
+                alert('Imagem copiada com sucesso!');
+                return;
             }
-        } else {
-            if (devtoolsOpen) {
-                // DevTools foram fechadas, redirecionar de volta para a página original
-                if (window.location.pathname !== originalPageUrl) {
-                    window.location.href = originalPageUrl;
-                }
-            }
-            devtoolsOpen = false;
         }
     }
-
-    // Função para ativar uma ação específica após o recarregamento
-    function onPageReload() {
-        const devToolsOpened = sessionStorage.getItem('devToolsOpened') === 'true';
-        if (devToolsOpened) {
-            sessionStorage.removeItem('devToolsOpened'); // Limpar a flag
-            // Mostrar o conteúdo da página após o recarregamento se o DevTools foi fechado
-            document.body.style.visibility = 'visible';
-        } else {
-            // Mostrar o conteúdo da página após o carregamento inicial se não for uma situação de DevTools
-            document.body.style.visibility = 'visible';
-        }
-    }
-
-    // Função de exemplo que será ativada após o recarregamento
-    function activatePostReloadFunction() {
-        detectDevTools();
-    }
-
-    // Verificar imediatamente após o carregamento da página
-    detectDevTools();
-    onPageReload();
-
-    // Verificar a cada intervalo de tempo também, caso o usuário abra ou feche as DevTools após o carregamento inicial
-    setInterval(detectDevTools, checkInterval);
 });
+
+
+
+consoleControl(false);
 
 
         function showCategorySelector() {
@@ -1750,6 +1710,59 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
+async function consoleControl(isAdmin) {
+    if (!isAdmin) {
+        // Desabilitar menu de contexto (clique direito) se ainda não estiver desabilitado
+        if (!contextMenuListenerAdded) {
+            document.addEventListener('contextmenu', preventDefaultContextMenu);
+            contextMenuListenerAdded = true;
+        }
+
+        // Bloquear teclas de atalho
+        document.onkeydown = function(e) {
+            // F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+            if (
+                e.keyCode === 123 ||
+                (e.ctrlKey && e.shiftKey && e.keyCode === 73) ||
+                (e.ctrlKey && e.shiftKey && e.keyCode === 74) ||
+                (e.ctrlKey && e.keyCode === 85)
+            ) {
+                e.preventDefault();
+                return false;
+            }
+        };
+    } else {
+        // Reabilitar menu de contexto (clique direito) se ainda estiver desabilitado
+        if (contextMenuListenerAdded) {
+            document.removeEventListener('contextmenu', preventDefaultContextMenu);
+            contextMenuListenerAdded = false;
+        }
+
+        // Reabilitar teclas de atalho
+        document.onkeydown = null;
+    }
+}
+
+function preventDefaultContextMenu(e) {
+    e.preventDefault();
+
+    if (event.ctrlKey) {
+        event.preventDefault(); // Evita o menu de contexto padrão
+
+        const img = event.target;
+        if (img.tagName === 'IMG') {
+            const url = img.src;
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = url.substring(url.lastIndexOf('/') + 1); // Nome do arquivo
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    }
+}
+
+
 
 auth.onAuthStateChanged(async user => {
     if (user) {
@@ -1838,6 +1851,7 @@ auth.onAuthStateChanged(async user => {
         document.getElementById('user-info').style.display = 'block';
     }
 }
+
     </script>
 </body>
 </html>
