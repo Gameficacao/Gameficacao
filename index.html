@@ -201,6 +201,9 @@ input, textarea {
   .logo-container {
     margin: 50px;
   }
+  .botao-ativado {
+    margin-bottom: 50px;
+}
 }
 
 .post a {
@@ -359,6 +362,13 @@ body {
     margin-right: 50px;
 }
 
+.botao-desativado {
+    display: none;
+}
+
+.botao-ativado {
+    display: block;
+}
     </style>
 </head>
 <body>
@@ -380,6 +390,8 @@ body {
    </svg>
         <h1>Gameficação</h1>
     </div>
+    <button id="banheiro-button" class="botao-desativado">Banheiro</button>
+    <button id="liberar-button"  class="botao-desativado">Liberar Banheiro</button>
     <div id="user-info" class="section" display="none">
         <h2>Bem-vindo, <span id="user-name">Usuário</span></h2>
         <button onclick="logout()">Sair</button>
@@ -1110,6 +1122,7 @@ async function updateUserInfo() {
                 enableAdmin();
             }
 
+            habilitarBanheiro();
             document.getElementById('user-name').textContent = currentUsername;
             document.getElementById('create-category-button').style.display = isAdmin ? 'block' : 'none';
             checkUserPresence();
@@ -1118,6 +1131,92 @@ async function updateUserInfo() {
         }
     }
 }
+
+function habilitarBanheiro() {
+    var banheiro = document.getElementById('banheiro-button');
+    banheiro.classList.add('botao-ativado');
+
+    banheiro.addEventListener('click', () => {
+        var user = auth.currentUser;
+        if (user) {
+            var banheiro = document.getElementById('banheiro-button');
+            banheiro.classList.remove('botao-ativado');
+            var liberar = document.getElementById('liberar-button');
+            liberar.classList.add('botao-ativado');
+
+            var username = user.displayName || user.email;
+            var now = new Date();
+            var dateString = now.toISOString().split('T')[0]; // Obtém a data no formato YYYY-MM-DD
+
+            var userRef = firebase.database().ref('banheiro/' + dateString + '/' + username);
+
+            userRef.once('value').then(snapshot => {
+                var data = snapshot.val();
+                
+                if (data && data.status === 'no banheiro') {
+                    alert('Você já está marcado como "no banheiro" em outro dispositivo.');
+                } else {
+                    var timestamp = now.toISOString();
+
+                    userRef.set({
+                        timestamp: timestamp,
+                        status: 'no banheiro'
+                    }).then(() => {
+                        alert('Você está marcado como "no banheiro".');
+                    }).catch(error => {
+                        console.error('Erro ao atualizar o status no banco de dados:', error);
+                    });
+                }
+            });
+        } else {
+            alert('Você precisa estar logado para usar esta funcionalidade.');
+        }
+    });
+}
+
+function liberarBanheiro() {
+    var user = auth.currentUser;
+    if (user) {
+        var username = user.displayName || user.email;
+        var now = new Date();
+        var dateString = now.toISOString().split('T')[0]; // Obtém a data no formato YYYY-MM-DD
+
+        var userRef = firebase.database().ref('banheiro/' + dateString + '/' + username);
+
+        userRef.once('value').then(snapshot => {
+            var data = snapshot.val();
+            
+            if (data && data.status === 'no banheiro') {
+                userRef.update({
+                    status: 'liberado'
+                }).then(() => {
+                    auth.signOut().then(() => {
+                        alert('Você liberou o banheiro. Por favor, faça login novamente para confirmar.');
+                        var banheiro = document.getElementById('banheiro-button');
+                        banheiro.classList.remove('botao-ativado');
+                        var liberar = document.getElementById('liberar-button');
+                        liberar.classList.remove('botao-ativado');
+                    }).catch(error => {
+                        console.error('Erro ao fazer logout:', error);
+                    });
+                }).catch(error => {
+                    console.error('Erro ao atualizar o status no banco de dados:', error);
+                });
+            } else {
+                alert('Você não está marcado como "no banheiro".');
+            }
+        });
+    } else {
+        alert('Você precisa estar logado para usar esta funcionalidade.');
+    }
+}
+
+// Adicionar evento ao botão de liberar banheiro
+var liberarButton = document.getElementById('liberar-button');
+if (liberarButton) {
+    liberarButton.addEventListener('click', liberarBanheiro);
+}
+
 
 function enableAdmin() {
     isAdmin = true;
