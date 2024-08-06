@@ -369,6 +369,29 @@ body {
 .botao-ativado {
     display: block;
 }
+
+
+
+
+.section {
+     margin: 20px;
+}
+.password-container {
+    position: relative;
+}
+.password-container input[type="password"] {
+    padding-right: 40px; /* espaço para o ícone do botão */
+}
+.password-container .show-password-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-70%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+}
     </style>
 </head>
 <body>
@@ -402,27 +425,33 @@ body {
 
 
         <!-- Seção de Login -->
-        <div id="login-section" class="section visible">
-            <h2>Login</h2>
-            <input type="text" id="login-username" placeholder="Nome de usuário ou Email" aria-label="Nome de usuário ou Email">
+    <div id="login-section" class="section visible">
+        <h2>Login</h2>
+        <input type="text" id="login-username" placeholder="Nome de usuário ou Email" aria-label="Nome de usuário ou Email">
+        <div class="password-container">
             <input type="password" id="login-password" placeholder="Senha" aria-label="Senha">
-            <button onclick="login()">Entrar</button>
-            <button class="google-login-button" onclick="loginWithGoogle()">Login com Google</button>
-            <p>Não tem uma conta? <a href="javascript:void(0)" onclick="showRegistration()">Registre-se</a></p>
-            <div class="password-reset">
-                <a href="#" id="reset-password-link">Esqueceu sua senha?</a>
-              </div>              
+            <button class="show-password-btn" onclick="togglePassword('login-password')">👁️</button>
         </div>
+        <button onclick="login()">Entrar</button>
+        <button class="google-login-button" onclick="loginWithGoogle()">Login com Google</button>
+        <p>Não tem uma conta? <a href="javascript:void(0)" onclick="showRegistration()">Registre-se</a></p>
+        <div class="password-reset">
+            <a href="#" id="reset-password-link">Esqueceu sua senha?</a>
+        </div>
+    </div>
 
-        <!-- Seção de Registro -->
-        <div id="registration-section" class="section">
-            <h2>Registro</h2>
-            <input type="text" id="register-username" placeholder="Nome de usuário" aria-label="Nome de usuário">
-            <input type="email" id="register-email" placeholder="Email" aria-label="Email">
+    <!-- Seção de Registro -->
+    <div id="registration-section" class="section">
+        <h2>Registro</h2>
+        <input type="text" id="register-username" placeholder="Nome de usuário" aria-label="Nome de usuário">
+        <input type="email" id="register-email" placeholder="Email" aria-label="Email">
+        <div class="password-container">
             <input type="password" id="register-password" placeholder="Senha" aria-label="Senha">
-            <button onclick="register()">Registrar</button>
-            <p>Já tem uma conta? <a href="javascript:void(0)" onclick="showLogin()">Faça login</a></p>
+            <button class="show-password-btn" onclick="togglePassword('register-password')">👁️</button>
         </div>
+        <button onclick="register()">Registrar</button>
+        <p>Já tem uma conta? <a href="javascript:void(0)" onclick="showLogin()">Faça login</a></p>
+    </div>
 
         <!-- Seção de Definir Nome de Usuário -->
         <div id="set-username-section" class="section">
@@ -502,6 +531,12 @@ body {
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
     <script>
+
+function togglePassword(id) {
+            const passwordInput = document.getElementById(id);
+            const type = passwordInput.type === 'password' ? 'text' : 'password';
+            passwordInput.type = type;
+        }
 
 let contextMenuListenerAdded = false;
 
@@ -1134,87 +1169,92 @@ async function updateUserInfo() {
 
 function habilitarBanheiro() {
     var banheiro = document.getElementById('banheiro-button');
+    if (!banheiro) return; // Verifica se o botão existe
+
     banheiro.classList.add('botao-ativado');
 
-    banheiro.addEventListener('click', () => {
-        var user = auth.currentUser;
-        if (user) {
-            var banheiro = document.getElementById('banheiro-button');
-            banheiro.classList.remove('botao-ativado');
-            var liberar = document.getElementById('liberar-button');
-            liberar.classList.add('botao-ativado');
+    banheiro.addEventListener('click', handleBanheiroClick);
+    banheiro.addEventListener('touchstart', handleBanheiroClick);
+}
 
-            var username = user.displayName || user.email;
+async function handleBanheiroClick() {
+    var user = auth.currentUser;
+    if (user) {
+        try {
+            var username = currentUsername;
             var now = new Date();
             var dateString = now.toISOString().split('T')[0]; // Obtém a data no formato YYYY-MM-DD
 
-            var userRef = firebase.database().ref('banheiro/' + dateString + '/' + username);
+            var userRef = db.ref('banheiro/' + dateString + '/' + username);
 
-            userRef.once('value').then(snapshot => {
-                var data = snapshot.val();
-                
-                if (data && data.status === 'no banheiro') {
-                    alert('Você já está marcado como "no banheiro" em outro dispositivo.');
-                } else {
-                    var timestamp = now.toISOString();
-
-                    userRef.set({
-                        timestamp: timestamp,
-                        status: 'no banheiro'
-                    }).then(() => {
-                        alert('Você está marcado como "no banheiro".');
-                    }).catch(error => {
-                        console.error('Erro ao atualizar o status no banco de dados:', error);
-                    });
-                }
-            });
-        } else {
-            alert('Você precisa estar logado para usar esta funcionalidade.');
-        }
-    });
-}
-
-function liberarBanheiro() {
-    var user = auth.currentUser;
-    if (user) {
-        var username = user.displayName || user.email;
-        var now = new Date();
-        var dateString = now.toISOString().split('T')[0]; // Obtém a data no formato YYYY-MM-DD
-
-        var userRef = firebase.database().ref('banheiro/' + dateString + '/' + username);
-
-        userRef.once('value').then(snapshot => {
+            var snapshot = await userRef.once('value');
             var data = snapshot.val();
-            
+
             if (data && data.status === 'no banheiro') {
-                userRef.update({
-                    status: 'liberado'
-                }).then(() => {
-                    auth.signOut().then(() => {
-                        alert('Você liberou o banheiro. Por favor, faça login novamente para confirmar.');
-                        var banheiro = document.getElementById('banheiro-button');
-                        banheiro.classList.remove('botao-ativado');
-                        var liberar = document.getElementById('liberar-button');
-                        liberar.classList.remove('botao-ativado');
-                    }).catch(error => {
-                        console.error('Erro ao fazer logout:', error);
-                    });
-                }).catch(error => {
-                    console.error('Erro ao atualizar o status no banco de dados:', error);
-                });
+                showNotification('Você já está marcado como "no banheiro" em outro dispositivo.');
             } else {
-                alert('Você não está marcado como "no banheiro".');
+                var banheiro = document.getElementById('banheiro-button');
+                if (banheiro) banheiro.classList.remove('botao-ativado');
+                
+                var liberar = document.getElementById('liberar-button');
+                if (liberar) liberar.classList.add('botao-ativado');
+                liberar.addEventListener('click', liberarBanheiro);
+                liberar.addEventListener('touchstart', liberarBanheiro);
+
+                var timestamp = now.toISOString();
+
+                await userRef.set({
+                    timestamp: timestamp,
+                    status: 'no banheiro'
+                });
+
+                showNotification('Você está marcado como "no banheiro".');
             }
-        });
+        } catch (error) {
+            console.error('Erro ao acessar ou atualizar o banco de dados:', error);
+            showNotification('Erro ao acessar ou atualizar o banco de dados.', true);
+        }
     } else {
-        alert('Você precisa estar logado para usar esta funcionalidade.');
+        showNotification('Você precisa estar logado para usar esta funcionalidade.');
     }
 }
 
-// Adicionar evento ao botão de liberar banheiro
-var liberarButton = document.getElementById('liberar-button');
-if (liberarButton) {
-    liberarButton.addEventListener('click', liberarBanheiro);
+async function liberarBanheiro() {
+    var user = auth.currentUser;
+    if (user) {
+        try {
+            var username = currentUsername;
+            var now = new Date();
+            var dateString = now.toISOString().split('T')[0]; // Obtém a data no formato YYYY-MM-DD
+
+            var userRef = db.ref('banheiro/' + dateString + '/' + username);
+
+            var snapshot = await userRef.once('value');
+            var data = snapshot.val();
+
+            if (data && data.status === 'no banheiro') {
+                await userRef.update({
+                    timestamp: now.toISOString(),
+                    status: 'liberado'
+                });
+
+                await auth.signOut();
+
+                showNotification('Você liberou o banheiro. Por favor, faça login novamente para confirmar.');
+                var banheiro = document.getElementById('banheiro-button');
+                if (banheiro) banheiro.classList.add('botao-ativado');
+                var liberar = document.getElementById('liberar-button');
+                if (liberar) liberar.classList.remove('botao-ativado');
+            } else {
+                showNotification('Você não está marcado como "no banheiro".');
+            }
+        } catch (error) {
+            console.error('Erro ao acessar ou atualizar o banco de dados:', error);
+            showNotification('Erro ao acessar ou atualizar o banco de dados.', true);
+        }
+    } else {
+        showNotification('Você precisa estar logado para usar esta funcionalidade.');
+    }
 }
 
 
