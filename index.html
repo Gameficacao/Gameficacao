@@ -392,6 +392,12 @@ body {
     cursor: pointer;
     font-size: 18px;
 }
+
+.desabilitado {
+    opacity: 50%;
+    cursor: block;
+    pointer-events: none;
+}
     </style>
 </head>
 <body>
@@ -1177,7 +1183,29 @@ function habilitarBanheiro() {
     banheiro.addEventListener('touchstart', handleBanheiroClick);
 }
 
-async function handleBanheiroClick() {
+async function registrarTimeline(username, evento) {
+    try {
+        var now = new Date();
+        var timestamp = now.toISOString();
+        var dateString = now.toISOString().split('T')[0]; // Obtém a data no formato YYYY-MM-DD
+
+        var timelineRef = db.ref('banheiro/timeline/' + dateString);
+
+        // Adiciona um novo evento à timeline
+        await timelineRef.push({
+            username: username,
+            evento: evento,
+            timestamp: timestamp
+        });
+        
+    } catch (error) {
+        console.error('Erro ao registrar na timeline:', error);
+        showNotification('Erro ao registrar na timeline.', true);
+    }
+}
+
+
+async function handleBanheiroClick(event) {
     var user = auth.currentUser;
     if (user) {
         try {
@@ -1185,28 +1213,51 @@ async function handleBanheiroClick() {
             var now = new Date();
             var dateString = now.toISOString().split('T')[0]; // Obtém a data no formato YYYY-MM-DD
 
+            // Verifica se alguém já está no banheiro
+            var snapshot = await db.ref('banheiro/' + 'status/banheiro').once('value');
+            var currentStatus = snapshot.val();
+
+            if (currentStatus && currentStatus !== username + ' está no banheiro') {
+                showNotification(currentStatus + ' Por favor, aguarde até que o banheiro seja liberado.');
+                event.preventDefault(); // Proíbe o clique
+                return;
+            }
+
             var userRef = db.ref('banheiro/' + dateString + '/' + username);
 
-            var snapshot = await userRef.once('value');
-            var data = snapshot.val();
+            var userSnapshot = await userRef.once('value');
+            var userData = userSnapshot.val();
 
-            if (data && data.status === 'no banheiro') {
+            if (userData && userData.status === 'no banheiro') {
                 showNotification('Você já está marcado como "no banheiro" em outro dispositivo.');
             } else {
-                var banheiro = document.getElementById('banheiro-button');
-                if (banheiro) banheiro.classList.remove('botao-ativado');
-                
-                var liberar = document.getElementById('liberar-button');
-                if (liberar) liberar.classList.add('botao-ativado');
-                liberar.addEventListener('click', liberarBanheiro);
-                liberar.addEventListener('touchstart', liberarBanheiro);
-
                 var timestamp = now.toISOString();
 
                 await userRef.set({
                     timestamp: timestamp,
                     status: 'no banheiro'
                 });
+
+                await registrarTimeline(username, 'ida ao banheiro');
+
+                // Atualiza o texto do botão para todos no site
+                await db.ref('banheiro/' + 'status/banheiro').set(username + ' está no banheiro');
+
+                // Desativa o botão de banheiro para todos
+                await db.ref('banheiro/' + 'banheiro-disabled/' + dateString).set(true);
+
+                // Atualiza o texto e desativa o botão localmente
+                var banheiro = document.getElementById('banheiro-button');
+                if (banheiro) {
+                    banheiro.innerText = username + ' está no banheiro';
+                    banheiro.disabled = true;
+                    banheiro.classList.remove('botao-ativado');
+                }
+
+                var liberar = document.getElementById('liberar-button');
+                if (liberar) liberar.classList.add('botao-ativado');
+                liberar.addEventListener('click', liberarBanheiro);
+                liberar.addEventListener('touchstart', liberarBanheiro);
 
                 showNotification('Você está marcado como "no banheiro".');
             }
@@ -1233,16 +1284,18 @@ async function liberarBanheiro() {
             var data = snapshot.val();
 
             if (data && data.status === 'no banheiro') {
+                // Atualiza o status para "pendente"
                 await userRef.update({
                     timestamp: now.toISOString(),
-                    status: 'liberado'
+                    status: 'pendente'
                 });
+
+                await registrarTimeline(username, 'volta do banheiro');
 
                 await auth.signOut();
 
                 showNotification('Você liberou o banheiro. Por favor, faça login novamente para confirmar.');
-                var banheiro = document.getElementById('banheiro-button');
-                if (banheiro) banheiro.classList.add('botao-ativado');
+
                 var liberar = document.getElementById('liberar-button');
                 if (liberar) liberar.classList.remove('botao-ativado');
             } else {
@@ -1256,6 +1309,92 @@ async function liberarBanheiro() {
         showNotification('Você precisa estar logado para usar esta funcionalidade.');
     }
 }
+
+async function handleLogin() {
+    var user = auth.currentUser;
+    if (user) {
+        try {
+            var username = user.displayName; // Obtém o nome do usuário ao fazer login
+            var now = new Date();
+            var dateString = now.toISOString().split('T')[0];
+
+            var userRef = db.ref('banheiro/' + dateString + '/' + username);
+            await userRef.transaction((currentData) => {
+                if (currentData && currentData.status === 'pendente') {
+                    // Atualiza o status para "liberado"
+                    return {
+                        ...currentData,
+                        timestamp: now.toISOString(),
+                        status: 'liberado'
+                    };
+                }
+                return currentData;
+            });
+
+            // Se o status foi liberado, reativar o botão
+            var banheiroDisabledRef = db.ref('banheiro/' + 'banheiro-disabled/' + dateString);
+            await banheiroDisabledRef.set(false);
+
+            await db.ref('banheiro/' + 'status/banheiro').set('');
+
+            showNotification('O banheiro foi liberado com sucesso.');
+
+            var banheiro = document.getElementById('banheiro-button');
+            if (banheiro) {
+                banheiro.innerText = 'Usar o banheiro';
+                banheiro.disabled = false;
+                banheiro.classList.add('botao-ativado');
+            }
+
+            var liberar = document.getElementById('liberar-button');
+            if (liberar) liberar.classList.remove('botao-ativado');
+
+        } catch (error) {
+            console.error('Erro ao processar o login:', error);
+            showNotification('Erro ao processar o login.', true);
+        }
+    }
+}
+
+// Adicione um listener para detectar o login e chamar a função handleLogin
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        handleLogin();
+    }
+});
+
+async function verificarStatusBanheiro() {
+    try {
+        var snapshot = await db.ref('banheiro/' + 'status/banheiro').once('value');
+        var currentStatus = snapshot.val();
+        
+        var banheiroButton = document.getElementById('banheiro-button');
+        
+        if (currentStatus && currentStatus !== '') {
+            // Se alguém está no banheiro, desabilitar o botão
+            if (banheiroButton) {
+                banheiroButton.innerText = currentStatus;
+                banheiroButton.style.opacity = '0.5';
+                banheiroButton.style.pointerEvents = 'none';
+            }
+        } else {
+            // Se o banheiro está liberado, restaurar o botão ao estado normal
+            if (banheiroButton) {
+                banheiroButton.innerText = 'Usar o banheiro';
+                banheiroButton.style.opacity = '1';
+                banheiroButton.style.pointerEvents = 'auto';
+                banheiroButton.classList.add('botao-ativado');
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao verificar o status do banheiro:', error);
+        showNotification('Erro ao verificar o status do banheiro.', true);
+    }
+}
+
+// Chamar a função periodicamente para verificar o status do banheiro
+setInterval(verificarStatusBanheiro, 1000); // Verifica a cada 5 segundos
+
 
 
 function enableAdmin() {
